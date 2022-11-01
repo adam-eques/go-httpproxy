@@ -66,7 +66,8 @@ func (ctx *Context) onAuth(authType string, user string, pass string) bool {
 }
 
 func (ctx *Context) onConnect(host string) (ConnectAction ConnectAction,
-	newHost string) {
+	newHost string,
+) {
 	defer func() {
 		if err, ok := recover().(error); ok {
 			ctx.doError("Connect", ErrPanic, err)

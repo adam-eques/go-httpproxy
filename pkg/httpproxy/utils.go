@@ -23,7 +23,7 @@ func InMemoryResponse(code int, header http.Header, body []byte) *http.Response 
 		st = " " + st
 	}
 	var bodyReadCloser io.ReadCloser
-	var bodyContentLength = int64(0)
+	bodyContentLength := int64(0)
 	if body != nil {
 		bodyReadCloser = ioutil.NopCloser(bytes.NewBuffer(body))
 		bodyContentLength = int64(len(body))

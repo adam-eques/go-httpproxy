@@ -6,7 +6,7 @@ generate:
 	go generate ./...
 
 build: # build a server
-	go build -a -o $(SERVER_NAME) $(MODULE)/cmd/server
+	go build -a -o $(SERVER_NAME) $(MODULE)/cmd
 
 test:
 	go clean -testcache

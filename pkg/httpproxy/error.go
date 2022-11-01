@@ -45,7 +45,7 @@ func isConnectionClosed(err error) bool {
 		return true
 	}
 	i := 0
-	var newerr = &err
+	newerr := &err
 	for opError, ok := (*newerr).(*net.OpError); ok && i < 10; {
 		i++
 		newerr = &opError.Err
