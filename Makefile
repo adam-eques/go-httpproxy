@@ -12,5 +12,9 @@ test:
 	go clean -testcache
 	go test ./... -v
 
+run:
+	go build -a -o $(SERVER_NAME) $(MODULE)/cmd
+	./http-proxy-server
+
 server:
 	go run $(MODULE)/cmd

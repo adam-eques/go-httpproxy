@@ -82,12 +82,12 @@ func main() {
 		ch <- err
 	}()
 
-	// go func() {
-	// 	log.Printf("Start proxy server on port: %d", 8081)
-	// 	err := http.ListenAndServe(fmt.Sprintf(":%d", 8081), prx)
-
-	// 	ch <- err
-	// }()
+	go func() {
+		log.Printf("Start proxy server on port: %d", 8081)
+		// err := serveHTTPS("./pkg/httpproxy/ca_cert.pem", "./pkg/httpproxy/ca_key.pem")
+		err := httpproxy.ServeHTTP(8081)
+		ch <- err
+	}()
 
 	err = <-ch
 	if err != nil {
