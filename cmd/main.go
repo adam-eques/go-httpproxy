@@ -85,7 +85,7 @@ func main() {
 	go func() {
 		log.Printf("Start proxy server on port: %d", 8081)
 		// err := serveHTTPS("./pkg/httpproxy/ca_cert.pem", "./pkg/httpproxy/ca_key.pem")
-		err := httpproxy.ServeHTTP(8081)
+		err := httpproxy.ListenAndServeHTTP(8081, prx)
 		ch <- err
 	}()
 

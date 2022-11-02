@@ -136,8 +136,8 @@ func (c *InterceptConn) SetWriteDeadline(t time.Time) error {
 }
 
 func Handle(w http.ResponseWriter, r *http.Request, conns *ConnMap) {
-	w.WriteHeader(200)
-	w.Write([]byte("Hello World"))
+	// w.WriteHeader(200)
+	// w.Write([]byte("Hello World"))
 
 	conn, ok := conns.Pop(r.RemoteAddr)
 	if !ok {
@@ -164,14 +164,17 @@ func ServeHTTPS(certFile, keyFile string) error {
 	return server.Serve(httpsListener)
 }
 
-func ServeHTTP(port uint) error {
+func ListenAndServeHTTP(port uint, handler http.Handler) error {
 	httpsListener, httpsConns, err := InterceptListen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return err
 	}
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { Handle(w, r, httpsConns) })
+	newHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handler.ServeHTTP(w, r)
+		Handle(w, r, httpsConns)
+	})
 
-	server := &http.Server{Handler: handler, Addr: fmt.Sprintf(":%d", port)}
+	server := &http.Server{Handler: newHandler, Addr: fmt.Sprintf(":%d", port)}
 	return server.Serve(httpsListener)
 }
