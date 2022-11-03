@@ -34,6 +34,15 @@ func (cm *ConnMap) Push(conn net.Conn) {
 	cm.conns[conn.RemoteAddr().String()] = conn
 }
 
+func (cm *ConnMap) Find(remoteAddr string) (net.Conn, bool) {
+	fmt.Printf("ConnMap Finding '%v'\n", remoteAddr)
+	cm.m.Lock()
+	defer cm.m.Unlock()
+	c, ok := cm.conns[remoteAddr]
+	// delete(cm.conns, remoteAddr)
+	return c, ok
+}
+
 type InterceptListener struct {
 	realListener net.Listener
 	connMap      *ConnMap
@@ -89,6 +98,18 @@ type InterceptConn struct {
 	realConn     net.Conn
 	bytesRead    int
 	bytesWritten int
+	requested    bool
+	responsed    bool
+
+	OnClose func(bytesRead, bytesWritten int)
+}
+
+func (c *InterceptConn) Requested() {
+	c.requested = true
+}
+
+func (c *InterceptConn) Responsed() {
+	c.responsed = true
 }
 
 func (c *InterceptConn) BytesRead() int {
@@ -112,6 +133,15 @@ func (c *InterceptConn) Write(b []byte) (n int, err error) {
 }
 
 func (c *InterceptConn) Close() error {
+	if !c.requested {
+		c.bytesRead = 0
+	}
+	if !c.responsed {
+		c.bytesWritten = 0
+	}
+	if c.OnClose != nil {
+		c.OnClose(c.bytesRead, c.bytesWritten)
+	}
 	return c.realConn.Close()
 }
 
@@ -139,42 +169,43 @@ func Handle(w http.ResponseWriter, r *http.Request, conns *ConnMap) {
 	// w.WriteHeader(200)
 	// w.Write([]byte("Hello World"))
 
-	conn, ok := conns.Pop(r.RemoteAddr)
+	_, ok := conns.Pop(r.RemoteAddr)
 	if !ok {
 		fmt.Printf("ERROR RemoteAddr %v not in Conns\n", r.RemoteAddr)
 		return
 	}
-	interceptConn, ok := conn.(*InterceptConn)
-	if !ok {
-		fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
-		return
-	}
-	fmt.Printf("read %v bytes, wrote %v bytes\n", interceptConn.BytesRead(), interceptConn.BytesWritten())
+	// interceptConn, ok := conn.(*InterceptConn)
+	// if !ok {
+	// 	fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
+	// 	return
+	// }
+	// fmt.Printf("read %v bytes, wrote %v bytes\n", interceptConn.BytesRead(), interceptConn.BytesWritten())
 }
 
-func ServeHTTPS(certFile, keyFile string) error {
-	httpsListener, httpsConns, err := InterceptListenTLS("tcp", ":443", certFile, keyFile)
-	if err != nil {
-		return err
-	}
+// func ListenAndServeTLS(addr, certFile, keyFile string, proxy *Proxy) (*http.Server, error) {
+// 	httpsListener, httpsConns, err := InterceptListenTLS("tcp", addr, certFile, keyFile)
+// 	if err != nil || proxy == nil {
+// 		return nil, err
+// 	}
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { Handle(w, r, httpsConns) })
+// 	newHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		proxy.ServeHTTP(w, r, httpsConns)
+// 	})
 
-	server := &http.Server{Handler: handler, Addr: ":443"}
-	return server.Serve(httpsListener)
-}
+// 	server := &http.Server{Handler: newHandler, Addr: addr}
+// 	return server, server.Serve(httpsListener)
+// }
 
-func ListenAndServeHTTP(port uint, handler http.Handler) error {
-	httpsListener, httpsConns, err := InterceptListen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return err
-	}
+// func ListenAndServe(addr string, proxy *Proxy) (*http.Server, error) {
+// 	httpsListener, httpsConns, err := InterceptListen("tcp", addr)
+// 	if err != nil || proxy == nil {
+// 		return nil, err
+// 	}
 
-	newHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handler.ServeHTTP(w, r)
-		Handle(w, r, httpsConns)
-	})
+// 	newHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		proxy.ServeHTTP(w, r, httpsConns)
+// 	})
 
-	server := &http.Server{Handler: newHandler, Addr: fmt.Sprintf(":%d", port)}
-	return server.Serve(httpsListener)
-}
+// 	server := &http.Server{Handler: newHandler, Addr: addr}
+// 	return server, server.Serve(httpsListener)
+// }

@@ -20,6 +20,9 @@ type Proxy struct {
 	// Certificate key pair.
 	Ca tls.Certificate
 
+	// Https connection map to get the request and response size
+	HttpsConns *ConnMap
+
 	// User data to use free.
 	UserData interface{}
 
@@ -47,6 +50,9 @@ type Proxy struct {
 	// Response callback. It greets remote response.
 	// Remote response sends after this callback.
 	OnResponse func(ctx *Context, req *http.Request, resp *http.Response)
+
+	// Size count callback
+	SizeCount func(user string, read, written int)
 
 	// If ConnectAction is ConnectMitm, it sets chunked to Transfer-Encoding.
 	// By default, true.
@@ -92,6 +98,26 @@ func NewProxyCert(caCert, caKey []byte) (*Proxy, error) {
 // ServeHTTP implements http.Handler.
 func (prx *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := &Context{Prx: prx, SessionNo: atomic.AddInt64(&prx.SessionNo, 1)}
+
+	// count request and response size
+	// conns := prx.HttpsConns
+	// if conns != nil {
+	// 	conn, ok := conns.Find(r.RemoteAddr)
+	// 	if !ok {
+	// 		fmt.Printf("ERROR RemoteAddr %v not in Conns\n", r.RemoteAddr)
+	// 		return
+	// 	}
+	// 	interceptConn, ok := conn.(*InterceptConn)
+	// 	if !ok {
+	// 		fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
+	// 		return
+	// 	}
+	// 	// interceptConn.Requested()
+	// 	// interceptConn.Responsed()
+	// 	interceptConn.OnClose = func(bytesRead, bytesWritten int) {
+	// 		fmt.Printf("onClose in proxy read %v bytes, wrote %v bytes\n", bytesRead, bytesWritten)
+	// 	}
+	// }
 
 	defer func() {
 		rec := recover()

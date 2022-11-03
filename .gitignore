@@ -25,3 +25,5 @@
 *.vscode
 
 http-proxy-server
+ca_cert.pem
+ca_key.pem

@@ -23,6 +23,7 @@ func OnAccept(ctx *httpproxy.Context, w http.ResponseWriter,
 		w.Write([]byte("This is go-httpproxy."))
 		return true
 	}
+
 	return false
 }
 
@@ -45,7 +46,8 @@ func OnRequest(ctx *httpproxy.Context, req *http.Request) (
 	resp *http.Response,
 ) {
 	// Log proxying requests.
-	log.Printf("INFO: Proxy: %s %s", req.Method, req.URL.String())
+
+	log.Printf("INFO: Proxy: %s %s %s", req.URL.Scheme, req.Method, req.URL.String())
 	return
 }
 
@@ -56,9 +58,31 @@ func OnResponse(ctx *httpproxy.Context, req *http.Request,
 	resp.Header.Add("Via", "go-httpproxy")
 }
 
+func SizeCount(user string, read, written int) {
+	fmt.Printf("%s read %v bytes, wrote %v bytes\n", user, read, written)
+}
+
 func main() {
-	const PORT = 8080
-	// Create a new proxy with default certificate pair.
+	const PORT = 80
+
+	// cert, err := os.ReadFile("./ca_cert.pem")
+	// if err != nil {
+	// 	fmt.Println("Failed to load cert")
+	// }
+	// key, err := os.ReadFile("./ca_key.pem")
+	// if err != nil {
+	// 	fmt.Println("Failed to load key")
+	// }
+
+	var prx *httpproxy.Proxy
+	// // Create a new proxy with default certificate pair.
+	// if len(cert) == 0 || len(key) == 0 {
+	// 	fmt.Println("ssl with default cert & key")
+	// 	prx, err = httpproxy.NewProxy()
+	// } else {
+	// 	fmt.Println("ssl with custom cert & key")
+	// 	prx, err = httpproxy.NewProxyCert(cert, key)
+	// }
 	prx, err := httpproxy.NewProxy()
 	if err != nil {
 		log.Printf("Failed to init proxy server. error: %v", err)
@@ -72,20 +96,33 @@ func main() {
 	prx.OnRequest = OnRequest
 	prx.OnResponse = OnResponse
 
+	prx.SizeCount = SizeCount
+
 	// Listen...
 	// go http.ListenAndServe(":8080", prx)
 
 	ch := make(chan error, 2)
-	go func() {
-		log.Printf("Start proxy server on port: %d", PORT)
-		err := http.ListenAndServe(fmt.Sprintf(":%d", PORT), prx)
-		ch <- err
-	}()
+	// go func() {
+	// 	log.Printf("Start proxy server on port: %d", PORT)
+	// 	err := http.ListenAndServe(fmt.Sprintf(":%d", PORT), prx)
+	// 	ch <- err
+	// }()
+
+	addr := fmt.Sprintf(":%d", PORT)
 
 	go func() {
-		log.Printf("Start proxy server on port: %d", 8081)
-		// err := serveHTTPS("./pkg/httpproxy/ca_cert.pem", "./pkg/httpproxy/ca_key.pem")
-		err := httpproxy.ListenAndServeHTTP(8081, prx)
+		httpsListener, httpsConns, err := httpproxy.InterceptListen("tcp", addr)
+		if err != nil || prx == nil {
+			return
+		}
+
+		prx.HttpsConns = httpsConns
+
+		server := &http.Server{Handler: prx, Addr: addr}
+
+		log.Printf("Start proxy server on port: %d", PORT)
+		err = server.Serve(httpsListener)
+
 		ch <- err
 	}()
 

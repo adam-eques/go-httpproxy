@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -77,6 +78,21 @@ func (ctx *Context) onConnect(host string) (ConnectAction ConnectAction,
 }
 
 func (ctx *Context) onRequest(req *http.Request) (resp *http.Response) {
+	conns := ctx.Prx.HttpsConns
+	if conns != nil {
+		conn, ok := conns.Find(req.RemoteAddr)
+		if !ok {
+			fmt.Printf("ERROR RemoteAddr %v not in Conns in onRequest\n", req.RemoteAddr)
+			return
+		}
+		interceptConn, ok := conn.(*InterceptConn)
+		if !ok {
+			fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
+			return
+		}
+		interceptConn.Requested()
+	}
+
 	defer func() {
 		if err, ok := recover().(error); ok {
 			ctx.doError("Request", ErrPanic, err)
@@ -86,6 +102,21 @@ func (ctx *Context) onRequest(req *http.Request) (resp *http.Response) {
 }
 
 func (ctx *Context) onResponse(req *http.Request, resp *http.Response) {
+	conns := ctx.Prx.HttpsConns
+	if conns != nil {
+		conn, ok := conns.Pop(req.RemoteAddr)
+		if !ok {
+			fmt.Printf("ERROR RemoteAddr %v not in Conns in onResponse\n", req.RemoteAddr)
+			return
+		}
+		interceptConn, ok := conn.(*InterceptConn)
+		if !ok {
+			fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
+			return
+		}
+		interceptConn.Responsed()
+	}
+
 	defer func() {
 		if err, ok := recover().(error); ok {
 			ctx.doError("Response", ErrPanic, err)
@@ -116,6 +147,15 @@ func (ctx *Context) doAccept(w http.ResponseWriter, r *http.Request) bool {
 		}
 		return true
 	}
+
+	// // only http is allowed
+	// if r.URL.Scheme != "http" {
+	// 	if r.Body != nil {
+	// 		defer r.Body.Close()
+	// 	}
+	// 	ctx.doError("Accept", ErrNotSupportHTTPS, nil)
+	// 	return true
+	// }
 	return false
 }
 
@@ -143,8 +183,30 @@ func (ctx *Context) doAuth(w http.ResponseWriter, r *http.Request) bool {
 				if err == nil {
 					userpass := strings.SplitN(string(userpassraw), ":", 2)
 					if len(userpass) >= 2 && ctx.onAuth(authType, userpass[0], userpass[1]) {
+						// count request and response size
+						conns := ctx.Prx.HttpsConns
+						fmt.Println("conn")
+						if conns != nil {
+							conn, ok := conns.Find(r.RemoteAddr)
+							if !ok {
+								fmt.Printf("ERROR RemoteAddr %v not in Conns\n", r.RemoteAddr)
+								return false
+							}
+							interceptConn, ok := conn.(*InterceptConn)
+							if !ok {
+								fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
+								return false
+							}
+							// interceptConn.Requested()
+							// interceptConn.Responsed()
+							interceptConn.OnClose = func(bytesRead, bytesWritten int) {
+								ctx.Prx.SizeCount(userpass[0], bytesRead, bytesWritten)
+								// fmt.Printf("onClose in proxy read %v bytes, wrote %v bytes\n", bytesRead, bytesWritten)
+							}
+						}
 						return false
 					}
+
 				}
 			default:
 				unauthorized = false
@@ -164,6 +226,7 @@ func (ctx *Context) doAuth(w http.ResponseWriter, r *http.Request) bool {
 	if err != nil && !isConnectionClosed(err) {
 		ctx.doError("Auth", ErrResponseWrite, err)
 	}
+
 	return true
 }
 

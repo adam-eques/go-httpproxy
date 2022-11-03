@@ -20,6 +20,7 @@ var (
 	ErrRoundTrip                   = NewError("round trip")
 	ErrUnsupportedTransferEncoding = NewError("unsupported transfer encoding")
 	ErrNotSupportHTTPVer           = NewError("http version not supported")
+	ErrNotSupportHTTPS             = NewError("https is not yet supported")
 )
 
 // Error struct is base of library specific errors.
