@@ -12,6 +12,7 @@ import (
 
 	// "github.com/acentior/infiniteproxies_backend/pkg/logging"
 
+	"github.com/acentior/go-httpproxy/pkg/logging"
 	"github.com/stretchr/testify/suite"
 	// "go.uber.org/zap/zapcore"
 )
@@ -119,7 +120,8 @@ func (s *HandlerSuite) Test_proxyTest() {
 		if !tc.shouldFail {
 			body, err := ioutil.ReadAll(resp.Body)
 			s.NoError(err)
-			fmt.Printf("Body : %s", body)
+			logger := logging.DefaultLogger()
+			logger.Infof("Body : %s", body)
 			return
 		}
 	}

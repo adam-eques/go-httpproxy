@@ -5,12 +5,13 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/acentior/go-httpproxy/pkg/logging"
 )
 
 // Context keeps context of each proxy request.
@@ -54,6 +55,7 @@ func (ctx *Context) onAccept(w http.ResponseWriter, r *http.Request) bool {
 			ctx.doError("Accept", ErrPanic, err)
 		}
 	}()
+
 	return ctx.Prx.OnAccept(ctx, w, r)
 }
 
@@ -78,48 +80,52 @@ func (ctx *Context) onConnect(host string) (ConnectAction ConnectAction,
 }
 
 func (ctx *Context) onRequest(req *http.Request) (resp *http.Response) {
-	conns := ctx.Prx.HttpsConns
-	if conns != nil {
-		conn, ok := conns.Find(req.RemoteAddr)
-		if !ok {
-			fmt.Printf("ERROR RemoteAddr %v not in Conns in onRequest\n", req.RemoteAddr)
-			return
-		}
-		interceptConn, ok := conn.(*InterceptConn)
-		if !ok {
-			fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
-			return
-		}
-		interceptConn.Requested()
-	}
-
 	defer func() {
 		if err, ok := recover().(error); ok {
 			ctx.doError("Request", ErrPanic, err)
+		}
+
+		conns := ctx.Prx.HttpsConns
+		if conns != nil {
+			logger := logging.DefaultLogger()
+			logger.Infof("OnRequest %s %s", req.RemoteAddr, req.RequestURI)
+			conn, ok := conns.Find(req.RemoteAddr)
+			if !ok {
+				logger.Errorf("Context.onRequest: RemoteAddr not in Conns: addr: %s", req.RemoteAddr)
+				return
+			}
+			interceptConn, ok := conn.(*InterceptConn)
+			if !ok {
+				logger.Errorf("Context.onRequest: Could not get Conn info: Conn is not an InterceptConn: conn: %s", conn)
+				return
+			}
+			interceptConn.Requested()
 		}
 	}()
 	return ctx.Prx.OnRequest(ctx, req)
 }
 
 func (ctx *Context) onResponse(req *http.Request, resp *http.Response) {
-	conns := ctx.Prx.HttpsConns
-	if conns != nil {
-		conn, ok := conns.Pop(req.RemoteAddr)
-		if !ok {
-			fmt.Printf("ERROR RemoteAddr %v not in Conns in onResponse\n", req.RemoteAddr)
-			return
-		}
-		interceptConn, ok := conn.(*InterceptConn)
-		if !ok {
-			fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
-			return
-		}
-		interceptConn.Responsed()
-	}
-
 	defer func() {
 		if err, ok := recover().(error); ok {
 			ctx.doError("Response", ErrPanic, err)
+		}
+
+		conns := ctx.Prx.HttpsConns
+		if conns != nil {
+			logger := logging.DefaultLogger()
+			logger.Infof("onResponse %s %s", req.RemoteAddr, req.RequestURI)
+			conn, ok := conns.Find(req.RemoteAddr)
+			if !ok {
+				logger.Errorf("Context.onResponse: RemoteAddr not in Conns: addr: %s", req.RemoteAddr)
+				return
+			}
+			interceptConn, ok := conn.(*InterceptConn)
+			if !ok {
+				logger.Errorf("Context.onResponse: Could not get Conn info: Conn is not an InterceptConn: conn: %s", conn)
+				return
+			}
+			interceptConn.Responsed()
 		}
 	}()
 	ctx.Prx.OnResponse(ctx, req, resp)
@@ -156,6 +162,32 @@ func (ctx *Context) doAccept(w http.ResponseWriter, r *http.Request) bool {
 	// 	ctx.doError("Accept", ErrNotSupportHTTPS, nil)
 	// 	return true
 	// }
+
+	conns := ctx.Prx.HttpsConns
+	if conns != nil {
+		conn, ok := conns.Find(r.RemoteAddr)
+		logger := logging.DefaultLogger()
+		if !ok {
+			logger.Errorf("Context.doAuth: RemoteAddr not in Conns: addr: %s", r.RemoteAddr)
+			return false
+		}
+		interceptConn, ok := conn.(*InterceptConn)
+		if !ok {
+			logger.Errorf("Context.doAuth: Could not get Conn info: Conn is not an InterceptConn: conn: %s", conn)
+			return false
+		}
+		// interceptConn.Requested()
+		// interceptConn.Responsed()
+		interceptConn.OnClose = func(username string, bytesRead, bytesWritten int) {
+			_, ok := conns.Pop(r.RemoteAddr)
+			if !ok {
+				logger.Errorf("Context.doAccept: RemoteAddr not in Conns: addr: %s", r.RemoteAddr)
+			}
+			ctx.Prx.SizeCount(username, bytesRead, bytesWritten)
+			// logger := logging.DefaultLogger()
+			// logger.Infof("onClose in proxy read %v bytes, wrote %v bytes\n", bytesRead, bytesWritten)
+		}
+	}
 	return false
 }
 
@@ -183,26 +215,32 @@ func (ctx *Context) doAuth(w http.ResponseWriter, r *http.Request) bool {
 				if err == nil {
 					userpass := strings.SplitN(string(userpassraw), ":", 2)
 					if len(userpass) >= 2 && ctx.onAuth(authType, userpass[0], userpass[1]) {
-						// count request and response size
+						// Set authenticated username
 						conns := ctx.Prx.HttpsConns
-						fmt.Println("conn")
 						if conns != nil {
 							conn, ok := conns.Find(r.RemoteAddr)
+							logger := logging.DefaultLogger()
 							if !ok {
-								fmt.Printf("ERROR RemoteAddr %v not in Conns\n", r.RemoteAddr)
+								logger.Errorf("Context.doAuth: RemoteAddr not in Conns: addr: %s", r.RemoteAddr)
 								return false
 							}
 							interceptConn, ok := conn.(*InterceptConn)
 							if !ok {
-								fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
+								logger.Errorf("Context.doAuth: Could not get Conn info: Conn is not an InterceptConn: conn: %s", conn)
 								return false
 							}
 							// interceptConn.Requested()
 							// interceptConn.Responsed()
-							interceptConn.OnClose = func(bytesRead, bytesWritten int) {
-								ctx.Prx.SizeCount(userpass[0], bytesRead, bytesWritten)
-								// fmt.Printf("onClose in proxy read %v bytes, wrote %v bytes\n", bytesRead, bytesWritten)
-							}
+							interceptConn.SetUsername(userpass[0])
+							// interceptConn.OnClose = func(bytesRead, bytesWritten int) {
+							// 	_, ok := conns.Pop(r.RemoteAddr)
+							// 	if !ok {
+							// 		logger.Errorf("Context.doAuth: RemoteAddr not in Conns: addr: %s", r.RemoteAddr)
+							// 	}
+							// 	ctx.Prx.SizeCount(userpass[0], bytesRead, bytesWritten)
+							// 	// logger := logging.DefaultLogger()
+							// 	// logger.Infof("onClose in proxy read %v bytes, wrote %v bytes\n", bytesRead, bytesWritten)
+							// }
 						}
 						return false
 					}

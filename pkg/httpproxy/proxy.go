@@ -104,18 +104,21 @@ func (prx *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// if conns != nil {
 	// 	conn, ok := conns.Find(r.RemoteAddr)
 	// 	if !ok {
-	// 		fmt.Printf("ERROR RemoteAddr %v not in Conns\n", r.RemoteAddr)
+	// 		logger := logging.DefaultLogger()
+	// logger.Infof("ERROR RemoteAddr %v not in Conns\n", r.RemoteAddr)
 	// 		return
 	// 	}
 	// 	interceptConn, ok := conn.(*InterceptConn)
 	// 	if !ok {
-	// 		fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
+	// 		logger := logging.DefaultLogger()
+	// logger.Infof("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
 	// 		return
 	// 	}
 	// 	// interceptConn.Requested()
 	// 	// interceptConn.Responsed()
 	// 	interceptConn.OnClose = func(bytesRead, bytesWritten int) {
-	// 		fmt.Printf("onClose in proxy read %v bytes, wrote %v bytes\n", bytesRead, bytesWritten)
+	// 		logger := logging.DefaultLogger()
+	// logger.Infof("onClose in proxy read %v bytes, wrote %v bytes\n", bytesRead, bytesWritten)
 	// 	}
 	// }
 

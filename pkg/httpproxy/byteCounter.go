@@ -2,11 +2,11 @@ package httpproxy
 
 import (
 	"crypto/tls"
-	"fmt"
 	"net"
-	"net/http"
 	"sync"
 	"time"
+
+	"github.com/acentior/go-httpproxy/pkg/logging"
 )
 
 type ConnMap struct {
@@ -19,7 +19,8 @@ func NewConnMap() *ConnMap {
 }
 
 func (cm *ConnMap) Pop(remoteAddr string) (net.Conn, bool) {
-	fmt.Printf("ConnMap popping '%v'\n", remoteAddr)
+	logger := logging.DefaultLogger()
+	logger.Infof("ConnMap popping '%v'\n", remoteAddr)
 	cm.m.Lock()
 	defer cm.m.Unlock()
 	c, ok := cm.conns[remoteAddr]
@@ -28,14 +29,16 @@ func (cm *ConnMap) Pop(remoteAddr string) (net.Conn, bool) {
 }
 
 func (cm *ConnMap) Push(conn net.Conn) {
-	fmt.Printf("ConnMap pushing '%v'\n", conn.RemoteAddr().String())
+	logger := logging.DefaultLogger()
+	logger.Infof("ConnMap pushing '%v'\n", conn.RemoteAddr().String())
 	cm.m.Lock()
 	defer cm.m.Unlock()
 	cm.conns[conn.RemoteAddr().String()] = conn
 }
 
 func (cm *ConnMap) Find(remoteAddr string) (net.Conn, bool) {
-	fmt.Printf("ConnMap Finding '%v'\n", remoteAddr)
+	logger := logging.DefaultLogger()
+	logger.Infof("ConnMap Finding '%v'\n", remoteAddr)
 	cm.m.Lock()
 	defer cm.m.Unlock()
 	c, ok := cm.conns[remoteAddr]
@@ -82,11 +85,13 @@ func (l *InterceptListener) Accept() (net.Conn, error) {
 	}
 	interceptConn := &InterceptConn{realConn: c}
 	l.connMap.Push(interceptConn)
-	fmt.Printf("InterceptListener Accept conn %T\n", c)
+	logger := logging.DefaultLogger()
+	logger.Infof("InterceptListener Accept conn %T\n", c)
 	return interceptConn, nil
 }
 
 func (l *InterceptListener) Close() error {
+	logging.DefaultLogger().Infof("InterceptListener: Close TSL connection")
 	return l.realListener.Close()
 }
 
@@ -98,10 +103,15 @@ type InterceptConn struct {
 	realConn     net.Conn
 	bytesRead    int
 	bytesWritten int
+	username     string
 	requested    bool
 	responsed    bool
 
-	OnClose func(bytesRead, bytesWritten int)
+	OnClose func(username string, bytesRead, bytesWritten int)
+}
+
+func (c *InterceptConn) SetUsername(username string) {
+	c.username = username
 }
 
 func (c *InterceptConn) Requested() {
@@ -133,6 +143,7 @@ func (c *InterceptConn) Write(b []byte) (n int, err error) {
 }
 
 func (c *InterceptConn) Close() error {
+	logging.DefaultLogger().Warn("*InterceptConn.Close()")
 	if !c.requested {
 		c.bytesRead = 0
 	}
@@ -140,7 +151,7 @@ func (c *InterceptConn) Close() error {
 		c.bytesWritten = 0
 	}
 	if c.OnClose != nil {
-		c.OnClose(c.bytesRead, c.bytesWritten)
+		c.OnClose(c.username, c.bytesRead, c.bytesWritten)
 	}
 	return c.realConn.Close()
 }
@@ -165,22 +176,25 @@ func (c *InterceptConn) SetWriteDeadline(t time.Time) error {
 	return c.realConn.SetWriteDeadline(t)
 }
 
-func Handle(w http.ResponseWriter, r *http.Request, conns *ConnMap) {
-	// w.WriteHeader(200)
-	// w.Write([]byte("Hello World"))
+// func Handle(w http.ResponseWriter, r *http.Request, conns *ConnMap) {
+// 	// w.WriteHeader(200)
+// 	// w.Write([]byte("Hello World"))
 
-	_, ok := conns.Pop(r.RemoteAddr)
-	if !ok {
-		fmt.Printf("ERROR RemoteAddr %v not in Conns\n", r.RemoteAddr)
-		return
-	}
-	// interceptConn, ok := conn.(*InterceptConn)
-	// if !ok {
-	// 	fmt.Printf("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
-	// 	return
-	// }
-	// fmt.Printf("read %v bytes, wrote %v bytes\n", interceptConn.BytesRead(), interceptConn.BytesWritten())
-}
+// 	_, ok := conns.Pop(r.RemoteAddr)
+// 	if !ok {
+// 		logger := logging.DefaultLogger()
+// 		logger.Infof("ERROR RemoteAddr %v not in Conns\n", r.RemoteAddr)
+// 		return
+// 	}
+// 	// interceptConn, ok := conn.(*InterceptConn)
+// 	// if !ok {
+// 	// 	logger := logging.DefaultLogger()
+// 	// logger.Infof("ERROR Could not get Conn info: Conn is not an InterceptConn: %T\n", conn)
+// 	// 	return
+// 	// }
+// 	// logger := logging.DefaultLogger()
+// 	// logger.Infof("read %v bytes, wrote %v bytes\n", interceptConn.BytesRead(), interceptConn.BytesWritten())
+// }
 
 // func ListenAndServeTLS(addr, certFile, keyFile string, proxy *Proxy) (*http.Server, error) {
 // 	httpsListener, httpsConns, err := InterceptListenTLS("tcp", addr, certFile, keyFile)
