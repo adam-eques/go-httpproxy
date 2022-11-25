@@ -24,7 +24,7 @@ import (
 
 	goproxy "github.com/acentior/go-httpproxy/pkg/proxy"
 	goproxy_image "github.com/acentior/go-httpproxy/pkg/proxy/ext/image"
-	// goproxy_image "github.com/acentior/go-httpproxy/pkg/proxy/ext/image"
+	// goproxy_image "github.com/acentior/go-httpproxy/internal/proxy/ext/image"
 )
 
 var acceptAllCerts = &tls.Config{InsecureSkipVerify: true}

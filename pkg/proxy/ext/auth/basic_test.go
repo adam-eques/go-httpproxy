@@ -46,7 +46,7 @@ func TestBasicConnectAuthWithCurl(t *testing.T) {
 	background := httptest.NewTLSServer(ConstantHanlder(expected))
 	defer background.Close()
 	proxy := goproxy.NewProxyHttpServer()
-	proxy.OnRequest().HandleConnect(auth.BasicConnect("my_realm", func(user, passwd string) bool {
+	proxy.OnRequest().HandleConnect(auth.BasicConnect("my_realm", func(req *http.Request, user, passwd string) bool {
 		return user == "user" && passwd == "open sesame"
 	}))
 	_, proxyserver := oneShotProxy(proxy)
@@ -74,7 +74,7 @@ func TestBasicAuthWithCurl(t *testing.T) {
 	background := httptest.NewServer(ConstantHanlder(expected))
 	defer background.Close()
 	proxy := goproxy.NewProxyHttpServer()
-	proxy.OnRequest().Do(auth.Basic("my_realm", func(user, passwd string) bool {
+	proxy.OnRequest().Do(auth.Basic("my_realm", func(req *http.Request, user, passwd string) bool {
 		return user == "user" && passwd == "open sesame"
 	}))
 	_, proxyserver := oneShotProxy(proxy)
@@ -101,7 +101,7 @@ func TestBasicAuth(t *testing.T) {
 	background := httptest.NewServer(ConstantHanlder(expected))
 	defer background.Close()
 	proxy := goproxy.NewProxyHttpServer()
-	proxy.OnRequest().Do(auth.Basic("my_realm", func(user, passwd string) bool {
+	proxy.OnRequest().Do(auth.Basic("my_realm", func(req *http.Request, user, passwd string) bool {
 		return user == "user" && passwd == "open sesame"
 	}))
 	client, proxyserver := oneShotProxy(proxy)
@@ -154,7 +154,7 @@ func TestWithBrowser(t *testing.T) {
 	proxy := goproxy.NewProxyHttpServer()
 	println("proxy localhost port 8082")
 	access := int32(0)
-	proxy.OnRequest().Do(auth.Basic("my_realm", func(user, passwd string) bool {
+	proxy.OnRequest().Do(auth.Basic("my_realm", func(req *http.Request, user, passwd string) bool {
 		atomic.AddInt32(&access, 1)
 		return user == "user" && passwd == "1234"
 	}))
