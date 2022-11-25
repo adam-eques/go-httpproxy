@@ -1,5 +1,5 @@
 MODULE = $(shell go list -m)
-SERVER_NAME = http-proxy-server
+SERVER_NAME = http-proxy
 
 .PHONY: generate build test lint build-docker compose compose-down migrate
 generate:
@@ -11,10 +11,6 @@ build: # build a server
 test:
 	go clean -testcache
 	go test ./... -v
-
-run:
-	go build -a -o $(SERVER_NAME) $(MODULE)/cmd
-	./http-proxy-server
 
 server:
 	go run $(MODULE)/cmd
