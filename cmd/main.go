@@ -1,18 +1,26 @@
 package main
 
 import (
-	"flag"
-	"log"
-	"net/http"
-
+	"github.com/acentior/go-httpproxy/pkg/logging"
 	goproxy "github.com/acentior/go-httpproxy/pkg/proxy"
+	"github.com/acentior/go-httpproxy/pkg/proxy/util"
 )
 
 func main() {
-	verbose := flag.Bool("v", true, "should every proxy request be logged to stdout")
-	addr := flag.String("addr", ":8080", "proxy listen address")
-	flag.Parse()
+	logger := logging.DefaultLogger()
+
 	proxy := goproxy.NewProxyHttpServer()
-	proxy.Verbose = *verbose
-	log.Fatal(http.ListenAndServe(*addr, proxy))
+	proxyConfig := util.ProxyConfig{
+		Port:       8080,
+		CACertPath: "",
+		CAKeyPath:  "",
+	}
+	srvProxy, httpsListener := util.HttpServer(proxy, &proxyConfig)
+	if srvProxy == nil || httpsListener == nil {
+		logger.Errorw("Faild to configure proxy server", "config", proxyConfig)
+		return
+	} else {
+		logger.Infof("Start to proxy server :%d", proxyConfig.Port)
+		srvProxy.Serve(httpsListener)
+	}
 }
