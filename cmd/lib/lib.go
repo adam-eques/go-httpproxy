@@ -9,12 +9,14 @@ import (
 )
 
 //export RunProxy
-func RunProxy() {
+func RunProxy(port int, user *C.char, pass *C.char) {
 	logger := logging.DefaultLogger()
 
 	proxy := goproxy.NewProxyHttpServer()
 	proxyConfig := util.ProxyConfig{
-		Port:       8080,
+		Port:       uint(port),
+		Username:   C.GoString(user),
+		Password:   C.GoString(pass),
 		CACertPath: "",
 		CAKeyPath:  "",
 	}
