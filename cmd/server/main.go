@@ -12,6 +12,9 @@ func main() {
 	proxy := goproxy.NewProxyHttpServer()
 	proxyConfig := util.ProxyConfig{
 		Port:       8080,
+		Addr:       "127.0.0.1",
+		Username:   "admin",
+		Password:   "123456",
 		CACertPath: "",
 		CAKeyPath:  "",
 	}
@@ -20,7 +23,7 @@ func main() {
 		logger.Errorw("Faild to configure proxy server", "config", proxyConfig)
 		return
 	} else {
-		logger.Infof("Start to proxy server :%d", proxyConfig.Port)
+		logger.Infof("Start to proxy server %s:%d", proxyConfig.Addr, proxyConfig.Port)
 		srvProxy.Serve(httpsListener)
 	}
 }
